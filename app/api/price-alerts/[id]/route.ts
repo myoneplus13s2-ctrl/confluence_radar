@@ -55,7 +55,9 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
   try {
     const id = Number((await params).id);
     if (!Number.isInteger(id)) return fail("Bad alert id.", 400);
-    await (await db())`DELETE FROM price_alerts WHERE id = ${id}`;
+    // Keep the client in a variable: the bundler compiled `(await db())`...`` into db()`...` and broke delete.
+    const sql = await db();
+    await sql`DELETE FROM price_alerts WHERE id = ${id}`;
     return NextResponse.json({ ok: true });
   } catch (e) {
     return fail(e);
