@@ -82,9 +82,12 @@ export async function tick(sql: postgres.Sql): Promise<TickSummary> {
   }
 
   // ── Trends ──
-  const symbols = (await sql`
-    SELECT symbol FROM signals WHERE signal_time > now() - make_interval(days => ${TRACK_DAYS})
-    UNION SELECT symbol FROM fibs WHERE active AND source = 'manual'`).map((r) => r.symbol as string);
+  // Watchlist symbols first, so a symbol just added gets its trends, fibs and oscillator in the next run.
+  const symbols = [...new Set((await sql`
+    SELECT symbol, 0 AS k FROM watchlist
+    UNION SELECT symbol, 1 FROM signals WHERE signal_time > now() - make_interval(days => ${TRACK_DAYS})
+    UNION SELECT symbol, 1 FROM fibs WHERE active AND source = 'manual'
+    ORDER BY k, symbol`).map((r) => r.symbol as string))];
   const previous = new Map<string, postgres.Row>();
   for (const r of await sql`SELECT * FROM trends`) previous.set(`${r.symbol}|${r.tf}`, r);
 

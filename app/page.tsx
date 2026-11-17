@@ -7,7 +7,7 @@ import { Alerts, Fibs, FibSignals, Trends } from "./confluence";
 import { FibAlarm, FibHits, useAlarm } from "./fib-alarm";
 import { PriceAlerts } from "./price-alerts";
 
-type Tab = "matches" | "fib" | "hits" | "myalerts" | "osc" | "trends" | "fibs" | "signals" | "symbols" | "uploads" | "alerts";
+type Tab = "matches" | "fib" | "hits" | "myalerts" | "osc" | "trends" | "fibs" | "signals" | "symbols" | "watchlist" | "uploads" | "alerts";
 
 interface Signal {
   id: number;
@@ -523,6 +523,17 @@ function Symbols({ fmt, refresh }: { fmt: (s: string) => string; refresh: number
   const [showFibs, setShowFibs] = useState(true);
   const [board, setBoard] = useState<SymbolFibs[]>([]);
   const [osc, setOsc] = useState<OscData | null>(null);
+  const [watched, setWatched] = useState<Set<string>>(new Set());
+  const toggleWatch = async (symbol: string) => {
+    try {
+      const list = watched.has(symbol)
+        ? await sendJson<WatchItem[]>(`/api/watchlist?symbol=${encodeURIComponent(symbol)}`, "DELETE")
+        : (await sendJson<{ list: WatchItem[] }>("/api/watchlist", "POST", { symbol })).list;
+      setWatched(new Set(list.map((w) => w.symbol)));
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    }
+  };
   useEffect(() => {
     setOrder(load("symbols.order", "gold"));
     setShowFibs(load("symbols.showFibs", true));
@@ -531,6 +542,7 @@ function Symbols({ fmt, refresh }: { fmt: (s: string) => string; refresh: number
     getJson<Signal[]>(`/api/symbols`).then(setRows).catch((e) => setErr(e.message));
     getJson<SymbolFibs[]>("/api/symbol-fibs").then(setBoard).catch(() => {});
     getJson<OscData>("/api/osc?days=0").then(setOsc).catch(() => {});
+    getJson<WatchItem[]>("/api/watchlist").then((l) => setWatched(new Set(l.map((w) => w.symbol)))).catch(() => {});
   }, [refresh]);
   const oscBySymbol = useMemo(() => {
     const m = new Map<string, OscSignal[]>();
@@ -590,7 +602,12 @@ function Symbols({ fmt, refresh }: { fmt: (s: string) => string; refresh: number
                 const goldDir = (info?.gold ?? []).filter((g) => g.live).sort((a, b) => b.signal_time.localeCompare(a.signal_time))[0]?.direction;
                 return (
                 <tr key={s}>
-                  <td><strong>{s}</strong></td>
+                  <td className="nowrap">
+                    <strong>{s}</strong>{" "}
+                    <button className="btn small" title={watched.has(s) ? "Remove from watchlist" : "Add to watchlist"} onClick={() => toggleWatch(s)}>
+                      {watched.has(s) ? "★" : "☆"}
+                    </button>
+                  </td>
                   {tfs.map((t) => (
                     <td key={t}>
                       {cell(s, t).map((r) => {
@@ -770,6 +787,166 @@ function PrimeOsc({ fmt, refresh }: { fmt: (s: string) => string; refresh: numbe
   );
 }
 
+// ─────────────────────────────── Watchlist ───────────────────────────────
+
+async function sendJson<T>(url: string, method: string, body?: unknown): Promise<T> {
+  const r = await fetch(url, { method, headers: { "content-type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || r.statusText);
+  return j as T;
+}
+
+interface WatchItem { symbol: string; added_at: string }
+
+/**
+ * The Symbols board for the symbols the user added: Gold signals and fibs in their timeframe columns, plus the Prime
+ * Oscillator value on 1H, 2H, 4H and 1D at all times (🌡️/🧊 when beyond the level). No divergence or BOS/CHoCH.
+ */
+function Watchlist({ fmt, refresh }: { fmt: (s: string) => string; refresh: number }) {
+  const [list, setList] = useState<WatchItem[] | null>(null);
+  const [rows, setRows] = useState<Signal[]>([]);
+  const [board, setBoard] = useState<SymbolFibs[]>([]);
+  const [osc, setOsc] = useState<OscData | null>(null);
+  const [err, setErr] = useState("");
+  const [input, setInput] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [order, setOrder] = useState<"gold" | "name" | "added">("gold");
+  const [showFibs, setShowFibs] = useState(true);
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    setOrder(load("watch.order", "gold"));
+    setShowFibs(load("watch.showFibs", true));
+  }, []);
+  useEffect(() => {
+    getJson<WatchItem[]>("/api/watchlist").then(setList).catch((e) => setErr(e.message));
+    getJson<Signal[]>("/api/symbols").then(setRows).catch(() => {});
+    getJson<SymbolFibs[]>("/api/symbol-fibs").then(setBoard).catch(() => {});
+    getJson<OscData>("/api/osc?days=0").then(setOsc).catch(() => {});
+  }, [refresh, tick]);
+
+  const add = async () => {
+    if (!input.trim()) return;
+    setBusy(true);
+    setErr("");
+    try {
+      const r = await sendJson<{ symbol: string; list: WatchItem[] }>("/api/watchlist", "POST", { symbol: input });
+      setList(r.list);
+      setInput("");
+      // The check started by the add fills in the oscillator and fibs; look again once it has had time to run.
+      setTimeout(() => setTick((n) => n + 1), 60_000);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const remove = async (symbol: string) => {
+    try {
+      setList(await sendJson<WatchItem[]>(`/api/watchlist?symbol=${encodeURIComponent(symbol)}`, "DELETE"));
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  const known = useMemo(() => [...new Set(rows.map((r) => r.symbol))].sort(), [rows]);
+  const boardBySymbol = useMemo(() => new Map(board.map((b) => [b.symbol, b])), [board]);
+  const gold = useMemo(() => {
+    const m = new Map<string, Signal>();
+    for (const r of rows) if (r.family === "gold") m.set(`${r.symbol}|${r.tf}`, r);
+    return m;
+  }, [rows]);
+  const reading = useMemo(() => new Map((osc?.readings ?? []).map((r) => [`${r.symbol}|${r.tf}`, r])), [osc]);
+  const openOsc = useMemo(() => {
+    const m = new Map<string, OscSignal>();
+    for (const o of osc?.signals ?? []) if (!o.ended_t) m.set(`${o.symbol}|${o.tf}`, o);
+    return m;
+  }, [osc]);
+
+  const { symbols, tfs } = useMemo(() => {
+    const symbols = (list ?? []).map((w) => w.symbol);
+    if (order === "name") symbols.sort();
+    if (order === "gold") {
+      const rank = new Map(symbols.map((s) => [s, goldRank(boardBySymbol.get(s))]));
+      symbols.sort((a, b) => rank.get(a)!.tier - rank.get(b)!.tier || rank.get(b)!.t - rank.get(a)!.t || a.localeCompare(b));
+    }
+    const goldTfs = rows.filter((r) => r.family === "gold" && symbols.includes(r.symbol)).map((r) => r.tf);
+    return { symbols, tfs: [...new Set([...goldTfs, ...FIB_COLUMNS])].sort(tfSort) };
+  }, [list, order, boardBySymbol, rows]);
+
+  const level = osc?.level ?? 80;
+  return (
+    <>
+      <div className="panel row">
+        <input type="text" list="watch-known" placeholder="Add a symbol, e.g. BTCUSDT.P or BTC" value={input}
+          onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") add(); }} />
+        <datalist id="watch-known">{known.map((s) => <option key={s} value={s} />)}</datalist>
+        <button className="btn" onClick={add} disabled={busy || !input.trim()}>{busy ? "Adding…" : "Add"}</button>
+        <select value={order} onChange={(e) => { const v = e.target.value as "gold" | "name" | "added"; setOrder(v); save("watch.order", v); }}>
+          <option value="gold">Latest 15m/1H Gold first, then 4H/1D</option>
+          <option value="name">A–Z</option>
+          <option value="added">Order added</option>
+        </select>
+        <label className="small nowrap">
+          <input type="checkbox" checked={showFibs} onChange={(e) => { setShowFibs(e.target.checked); save("watch.showFibs", e.target.checked); }} /> Show fibs (hit / waiting)
+        </label>
+        <span className="small muted">
+          {symbols.length} symbols. Latest Gold per timeframe; ⚡ = under 24 hours old.
+          {" Prime Oscillator at the last closed candle on 1H, 2H (in the 1H column), 4H and 1D, always shown; 🌡️/🧊 = above +" + level + " / below -" + level + "."}
+          {showFibs && " Fibs sit in their column: 5m/15m → 15m, 1H/2H → 1H, 4H/8H → 4H, 1D/1W → 1D. ✅ = level already hit, ⏳ = waiting, with the distance from the price now."}
+          {" A symbol just added gets its oscillator and fibs within a minute or two."}
+        </span>
+      </div>
+      {err && <div className="panel status-err">{err}</div>}
+      <div className="panel tablewrap">
+        {list && list.length === 0 ? <div className="empty">Your watchlist is empty. Add a symbol above, or with ☆ on the Symbols tab.</div> : (
+          <table className="board">
+            <thead><tr><th>Symbol</th>{tfs.map((t) => <th key={t}>{t}</th>)}</tr></thead>
+            <tbody>
+              {symbols.map((s) => {
+                const info = boardBySymbol.get(s);
+                const goldDir = (info?.gold ?? []).filter((g) => g.live).sort((a, b) => b.signal_time.localeCompare(a.signal_time))[0]?.direction;
+                return (
+                  <tr key={s}>
+                    <td className="nowrap">
+                      <strong>{s}</strong>{" "}
+                      <button className="btn small" title="Remove from watchlist" onClick={() => remove(s)}>✕</button>
+                    </td>
+                    {tfs.map((t) => {
+                      const g = gold.get(`${s}|${t}`);
+                      const recent = g && Date.now() - new Date(g.signal_time).getTime() < 864e5;
+                      return (
+                        <td key={t}>
+                          {g && (
+                            <span className={`line ${recent ? "" : "old"}`}>
+                              {recent ? "⚡ " : ""}<Sig code={g.code} /> {fmt(g.signal_time)}
+                            </span>
+                          )}
+                          {OSC_TFS.filter((o) => OSC_COLUMN[o] === t).map((o) => {
+                            const run = openOsc.get(`${s}|${o}`);
+                            if (run) return <OscLine key={o} o={run} fmt={fmt} withTf />;
+                            const r = reading.get(`${s}|${o}`);
+                            return (
+                              <span key={o} className="line small" title={r ? `Last closed candle ${fmt(r.candle_t)}` : "Worked out at the next check"}>
+                                {tfLabel(o)} Osc {r ? <b>{signed(r.value)}</b> : <span className="muted">…</span>}
+                                {r?.prev_value != null && <span className="muted"> (was {signed(r.prev_value)})</span>}
+                              </span>
+                            );
+                          })}
+                          {showFibs && <CellFibs fibs={(info?.fibs ?? []).filter((f) => FIB_COLUMN[f.tf] === t)} goldDir={goldDir} fmt={fmt} />}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </>
+  );
+}
+
 // ─────────────────────────────── Uploads ───────────────────────────────
 
 function Uploads({ fmt, refresh, onChange }: { fmt: (s: string) => string; refresh: number; onChange: () => void }) {
@@ -842,6 +1019,7 @@ export default function Page() {
     ["fibs", "Fibs"],
     ["signals", "Signals"],
     ["symbols", "Symbols"],
+    ["watchlist", "Watchlist ⭐"],
     ["uploads", "Uploads"],
     ["alerts", "Telegram"],
   ];
@@ -874,6 +1052,7 @@ export default function Page() {
       {tab === "alerts" && <Alerts fmt={fmt} />}
       {tab === "signals" && <Signals fmt={fmt} refresh={refresh} />}
       {tab === "symbols" && <Symbols fmt={fmt} refresh={refresh} />}
+      {tab === "watchlist" && <Watchlist fmt={fmt} refresh={refresh} />}
       {tab === "uploads" && <Uploads fmt={fmt} refresh={refresh} onChange={bump} />}
     </div>
   );
