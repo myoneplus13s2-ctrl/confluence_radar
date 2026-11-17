@@ -7,13 +7,14 @@ import { correctSignal, deleteUpload, flatten, store } from "../lib/ingest";
 import { goldMatches, listSignals, symbolBoard } from "../lib/queries";
 import { checkPriceAlerts, sendPriceAlerts } from "../lib/price-alerts";
 import { DEFAULT_SETTINGS } from "../lib/telegram";
+import { addToWatchlist, listWatchlist, removeFromWatchlist, watchSymbol } from "../lib/watchlist";
 
 async function main() {
   if (!process.env.DATABASE_URL) {
     console.log("DATABASE_URL not set, skipping db tests");
     return;
   }
-  await sql().unsafe("DROP TABLE IF EXISTS price_alerts, level_hits, candles, candle_sets, fib_runs, fib_hits, fibs, trends, settings, alerts, ticks, sightings, signals, uploads, corrections");
+  await sql().unsafe("DROP TABLE IF EXISTS watchlist, price_alerts, level_hits, candles, candle_sets, fib_runs, fib_hits, fibs, trends, settings, alerts, ticks, sightings, signals, uploads, corrections");
   const s = await db();
   const offsets = { divergence: 330, structure: 0 };
   const ingest = async (file: string) => {
@@ -126,6 +127,16 @@ async function main() {
   assert.equal((await s`SELECT count(*)::int AS n FROM price_alerts WHERE sent`)[0].n, 0);
   assert.equal(await sendPriceAlerts(s, { ...DEFAULT_SETTINGS, priceAlerts: false }, []), 0);
   assert.equal((await s`SELECT count(*)::int AS n FROM price_alerts WHERE sent`)[0].n, 3);
+
+  // Watchlist: any spelling is stored as XXXUSDT.P, once
+  for (const raw of ["jup", "JUPUSDT", "BITGET:JUPUSDT.P", " jupusdt.p "]) assert.equal(watchSymbol(raw), "JUPUSDT.P");
+  await addToWatchlist(s, "jup");
+  await addToWatchlist(s, "BITGET:JUPUSDT.P");
+  await addToWatchlist(s, "btc");
+  assert.deepEqual((await listWatchlist(s)).map((w) => w.symbol), ["JUPUSDT.P", "BTCUSDT.P"]);
+  await removeFromWatchlist(s, "JUP");
+  assert.deepEqual((await listWatchlist(s)).map((w) => w.symbol), ["BTCUSDT.P"]);
+  await assert.rejects(addToWatchlist(s, "  "), /Type a symbol/);
 
   console.log("db tests passed");
   await sql().end();

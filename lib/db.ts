@@ -241,6 +241,11 @@ async function migrate(s: postgres.Sql) {
       UNIQUE (symbol, tf, side, started_t)
     );
     CREATE INDEX IF NOT EXISTS osc_signals_open ON osc_signals (symbol, tf) WHERE ended_t IS NULL;
+    -- Symbols the user keeps an eye on (Watchlist tab). The periodic check covers them even without signals.
+    CREATE TABLE IF NOT EXISTS watchlist (
+      symbol    TEXT PRIMARY KEY,
+      added_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
     -- An early screenshot upload misread ONDOUSDT.P as ONDUSDT.P, which Bitget doesn't list: fold it into ONDOUSDT.P.
     UPDATE signals s SET symbol = 'ONDOUSDT.P' WHERE s.symbol = 'ONDUSDT.P' AND NOT EXISTS (
       SELECT 1 FROM signals o WHERE o.symbol = 'ONDOUSDT.P' AND o.tf = s.tf AND o.code = s.code AND o.signal_time = s.signal_time);
