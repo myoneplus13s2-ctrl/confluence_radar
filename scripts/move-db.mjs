@@ -25,6 +25,8 @@ const ask = (q) => {
   return lines.length ? Promise.resolve(lines.shift()) : new Promise((r) => waiting.push(r));
 };
 const isLocal = (url) => /@(localhost|127\.0\.0\.1)[:/]/.test(url);
+/** The example value from .env.example ("postgres://user:pass@host/db") counts as not filled in. */
+const isPlaceholder = (url) => /@host\//.test(url);
 
 function readEnv() {
   if (!existsSync(envFile)) return "";
@@ -75,8 +77,8 @@ async function main() {
 
   const env = readEnv();
   let neon = envValue(env, "DATABASE_URL");
-  if (!neon || isLocal(neon)) neon = envValue(env, "NEON_DATABASE_URL");
-  if (!neon || isLocal(neon)) {
+  if (!neon || isLocal(neon) || isPlaceholder(neon)) neon = envValue(env, "NEON_DATABASE_URL");
+  if (!neon || isLocal(neon) || isPlaceholder(neon)) {
     neon = (await ask("Paste your Neon connection string (starts with postgresql://) and press Enter:\n> ")).trim();
   } else {
     console.log(`Neon database: ${neon.replace(/:[^:@/]*@/, ":****@")}`);
