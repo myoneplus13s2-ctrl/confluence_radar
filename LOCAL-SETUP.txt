@@ -4,8 +4,9 @@ CONFLUENCE RADAR ON YOUR OWN PC
 This runs the whole site on your Windows PC, the way it ran on Vercel:
 the web page, all the tabs, uploads from the capture script, the price
 check every 15 minutes (trends, fibs, Prime Oscillator, price alerts),
-Telegram alerts and the alarm sound. The data stays in the same Neon
-database, so everything you had on Vercel is still there.
+Telegram alerts and the alarm sound. The database can stay on Neon, or
+(recommended, section 7) be copied onto this PC with one click, so the
+Neon free plan's monthly compute limit no longer matters.
 
 You open it at:   http://localhost:3000
 
@@ -25,18 +26,20 @@ Step 2 - Get the newest files
   Your capture\config.json and capture\profiles are not in the ZIP, so
   they are kept.
 
-Step 3 - Copy your settings from Vercel
-  Open https://vercel.com -> confluence-radar -> Settings ->
-  Environment Variables. Click the eye icon on each one below to see its
-  value. You will paste them in Step 4.
+Step 3 - Collect your keys
+  Vercel does not show saved secrets again, so get each one from where
+  it came from:
 
-    DATABASE_URL        Your Neon database (starts with postgresql://).
-                        Also on https://console.neon.tech -> your project
-                        -> Connect.
-    GEMINI_API_KEY      Reads screenshots (free key from
-                        https://aistudio.google.com/apikey).
-    TELEGRAM_BOT_TOKEN  Your Telegram bot.
-    CRON_SECRET         Any long random text. Optional on your PC.
+    DATABASE_URL        Your Neon database (starts with postgresql://):
+                        https://console.neon.tech -> your project ->
+                        Connect -> copy the connection string ("Show
+                        password" if it is hidden). To move the database
+                        onto this PC instead, do section 7 first.
+    GEMINI_API_KEY      Reads screenshots: https://aistudio.google.com/apikey
+                        (copy your key, or "Create API key").
+    TELEGRAM_BOT_TOKEN  In Telegram: @BotFather -> /mybots -> your bot ->
+                        API Token. Do not press "Revoke".
+    CRON_SECRET         Not needed on your PC. Leave it empty.
 
   Optional ones, only if you used them: APP_PASSWORD (site password),
   ANTHROPIC_API_KEY, TELEGRAM_CHAT_ID, ALERT_TZ, GEMINI_MODEL.
@@ -146,3 +149,43 @@ Port 3000 is already in use ("EADDRINUSE")
 Neon free plan
     The database pauses itself when idle and wakes on the next request,
     so the first page load after a quiet spell can take a few seconds.
+    When the monthly compute allowance runs out, Neon stops answering
+    until the next month: move the database to this PC (section 7).
+
+
+-----------------------------------------------------------------
+7. MOVE THE DATABASE ONTO THIS PC (recommended)
+-----------------------------------------------------------------
+
+  Your signals, fibs, alerts and settings are copied from Neon once.
+  Neon itself is only read, never changed, so you can go back any time.
+
+  Step 1 - Install PostgreSQL (free)
+    https://www.postgresql.org/download/windows/ -> "Download the
+    installer" -> newest version. Run it and keep the defaults. When it
+    asks for a password for the "postgres" user, choose one and WRITE IT
+    DOWN. Keep port 5432. Untick "Stack Builder" at the end.
+    PostgreSQL then runs by itself in the background, also after a
+    restart.
+
+  Step 2 - Copy the data
+    Close the Confluence Radar window if it is open.
+    Double-click  move-db-to-pc.bat . It asks for:
+      - your Neon connection string (only if .env.local does not have
+        it yet; see Step 3 of section 1 for where to find it),
+      - the postgres password from Step 1,
+      - the port (just press Enter).
+    It copies everything, checks that the number of signals matches, and
+    then changes DATABASE_URL in .env.local to the database on this PC.
+    The Neon address stays in .env.local as NEON_DATABASE_URL.
+
+  Step 3 - Start the site
+    Double-click  start-local.bat  as usual.
+
+  To go back to Neon: in .env.local, put the NEON_DATABASE_URL value
+  after DATABASE_URL= and start start-local.bat again.
+
+  Backups: the data now lives only on this PC. logs\neon-backup.dump is
+  the copy taken from Neon. To make a fresh backup at any time, open a
+  Command Prompt and run (change 18 to your version):
+    "C:\Program Files\PostgreSQL\18\bin\pg_dump" -U postgres -Fc -f radar-backup.dump confluence_radar
