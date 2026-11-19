@@ -1,5 +1,5 @@
 {
-  "site": "https://confluence-radar.vercel.app",
+  "site": "http://localhost:3000",
   "password": "",
   "browser": "chrome",
   "layouts": [

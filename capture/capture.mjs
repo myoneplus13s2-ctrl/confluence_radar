@@ -17,6 +17,8 @@ import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const config = JSON.parse(process.env.CAPTURE_CONFIG || readFileSync(join(here, "config.json"), "utf8"));
+// The site address: RADAR_URL overrides config.json's "site"; with neither, the site running on this computer.
+config.site = process.env.RADAR_URL || config.site || "http://localhost:3000";
 const profileDir = (name) => join(here, "profiles", name);
 const log = (...a) => console.log(new Date().toISOString(), ...a);
 
@@ -296,7 +298,8 @@ function authHeaders() {
 function uploadError(res, json) {
   const e = json.error;
   const msg = typeof e === "string" ? e : e?.message ?? e?.code;
-  return new Error(`HTTP ${res.status}${msg ? ": " + msg : ""}${res.status === 401 ? " (Vercel Authentication? Use the project's main .vercel.app address.)" : ""}`);
+  const hint = res.status === 401 ? ' (wrong "password" in config.json, or a protected Vercel address)' : "";
+  return new Error(`HTTP ${res.status}${msg ? ": " + msg : ""}${hint}`);
 }
 
 async function uploadText(entries) {
@@ -365,6 +368,16 @@ async function main() {
   }
   process.exitCode = report.every((r) => r.ok) ? 0 : 1;
 }
+
+/** fetch() only says "fetch failed" when nothing answers; say which address that was. */
+const realFetch = globalThis.fetch;
+globalThis.fetch = (url, opts) =>
+  realFetch(url, opts).catch((e) => {
+    if (String(url).startsWith(config.site)) {
+      throw new Error(`could not reach the site at ${config.site} (${e.cause?.code ?? e.message}). Is start-local.bat running?`);
+    }
+    throw e;
+  });
 
 main().catch((e) => {
   console.error(e);

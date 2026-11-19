@@ -13,7 +13,9 @@ use the capture folder on that PC instead of the path above.
 Every hour, Windows Task Scheduler runs a task called "Confluence Radar capture".
 The task runs "node capture.mjs", which opens each TradingView chart listed in
 config.json, reads the screeners' Pine Logs, and uploads the signals to
-https://confluence-radar.vercel.app. Anything it prints goes into capture.log
+the site in config.json ("site"). The site now runs on this PC
+(start-local.bat in the main folder, see LOCAL-SETUP.txt), so "site" is
+http://localhost:3000 and start-local.bat must be running. Anything it prints goes into capture.log
 in the same folder.
 
 Contents
@@ -340,9 +342,15 @@ C) After deleting it (section 6, C), create the task again
     - Close TradingView in your own browser while the capture runs.
     - Raise "waitSeconds" or "logsWaitSeconds" in config.json (section 10).
 
+"could not reach the site at http://localhost:3000"
+    The site is not running. Start start-local.bat in the main folder
+    (see LOCAL-SETUP.txt) and keep its window open.
+
 "HTTP 401"
-    "site" in config.json must be https://confluence-radar.vercel.app,
-    not an address ending in -sunny-b0d4.vercel.app.
+    "password" in config.json does not match APP_PASSWORD in .env.local.
+    (When the site was on Vercel: "site" had to be
+    https://confluence-radar.vercel.app, not an address ending in
+    -sunny-b0d4.vercel.app.)
 
 "Unexpected token ... in JSON" when the script starts
     config.json has a typo. Run the check in section 3, Step 5, fix the comma
@@ -362,7 +370,8 @@ Remove it again afterwards so the windows do not pop up every hour.
 10. SETTINGS IN CONFIG.JSON
 -----------------------------------------------------------------
 
-  site               The site address: https://confluence-radar.vercel.app
+  site               The site address: http://localhost:3000 (the site on
+                     this PC). Leave it out and that is used too.
   password           The site password (APP_PASSWORD), or "" if none.
   browser            "chrome" uses your installed Google Chrome.
   layouts            The list of charts (sections 3 to 5).

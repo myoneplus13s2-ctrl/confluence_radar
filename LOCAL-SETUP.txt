@@ -1,0 +1,148 @@
+CONFLUENCE RADAR ON YOUR OWN PC
+===============================
+
+This runs the whole site on your Windows PC, the way it ran on Vercel:
+the web page, all the tabs, uploads from the capture script, the price
+check every 15 minutes (trends, fibs, Prime Oscillator, price alerts),
+Telegram alerts and the alarm sound. The data stays in the same Neon
+database, so everything you had on Vercel is still there.
+
+You open it at:   http://localhost:3000
+
+
+-----------------------------------------------------------------
+1. ONE-TIME SETUP
+-----------------------------------------------------------------
+
+Step 1 - Node.js
+  You already have it (the capture script uses it). If not, install the
+  LTS version from https://nodejs.org
+
+Step 2 - Get the newest files
+  Download the repository as a ZIP from GitHub (green "Code" button ->
+  "Download ZIP") and unzip it over your current folder:
+      C:\Users\seccs\Documents\Tradingview Script\confluence_radar-main
+  Your capture\config.json and capture\profiles are not in the ZIP, so
+  they are kept.
+
+Step 3 - Copy your settings from Vercel
+  Open https://vercel.com -> confluence-radar -> Settings ->
+  Environment Variables. Click the eye icon on each one below to see its
+  value. You will paste them in Step 4.
+
+    DATABASE_URL        Your Neon database (starts with postgresql://).
+                        Also on https://console.neon.tech -> your project
+                        -> Connect.
+    GEMINI_API_KEY      Reads screenshots (free key from
+                        https://aistudio.google.com/apikey).
+    TELEGRAM_BOT_TOKEN  Your Telegram bot.
+    CRON_SECRET         Any long random text. Optional on your PC.
+
+  Optional ones, only if you used them: APP_PASSWORD (site password),
+  ANTHROPIC_API_KEY, TELEGRAM_CHAT_ID, ALERT_TZ, GEMINI_MODEL.
+  PORT=3000 can be changed if something else already uses port 3000.
+
+Step 4 - Start it the first time
+  Double-click  start-local.bat  in the main folder.
+  The first time, Notepad opens a file called .env.local. Paste each value
+  after its "=" sign, for example:
+      DATABASE_URL=postgresql://neondb_owner:....neon.tech/neondb?sslmode=require
+      GEMINI_API_KEY=AIza....
+      TELEGRAM_BOT_TOKEN=123456:ABC....
+  Save (Ctrl+S) and close Notepad, then press a key in the black window.
+
+  The first start installs packages and builds the site. That takes a few
+  minutes. When you see
+
+      Site is up: open http://localhost:3000 in your browser.
+
+  open http://localhost:3000 . Click once anywhere on the page so the
+  alarm sound is allowed to play.
+
+Step 5 - Point the capture script at your PC
+  Open capture\config.json in Notepad and change the "site" line to:
+      "site": "http://localhost:3000",
+  Save. The hourly "Confluence Radar capture" task now uploads to your PC.
+  (If you set APP_PASSWORD in .env.local, "password" in config.json must
+  be the same.)
+
+
+-----------------------------------------------------------------
+2. EVERY DAY
+-----------------------------------------------------------------
+
+  - Keep the black "Confluence Radar" window open. Minimise it; do not
+    close it. Closing it stops the site AND the 15-minute check.
+  - The 15-minute price check runs inside that window. Each run prints a
+    line like "Price check done in 12s".
+  - Everything it prints is also saved in logs\local.log.
+  - If the site crashes, the window restarts it by itself after 10 seconds.
+
+
+-----------------------------------------------------------------
+3. KEEP IT RUNNING
+-----------------------------------------------------------------
+
+Start by itself after a restart
+  Double-click  autostart-on.bat  once. From then on the site starts
+  (minimised) every time you sign in to Windows.
+  To undo: double-click  autostart-off.bat .
+
+Do not let the PC sleep
+  The site, the 15-minute check and the hourly capture only run while
+  the PC is awake. Windows Settings -> System -> Power -> "Screen and
+  sleep": set "When plugged in, put my device to sleep after" to Never.
+  The screen may turn off; that is fine.
+
+
+-----------------------------------------------------------------
+4. AFTER AN UPDATE
+-----------------------------------------------------------------
+
+  Close the black window, unzip the new files over the folder (Step 2),
+  and double-click start-local.bat again. It notices the new files,
+  reinstalls and rebuilds by itself.
+  To force a fresh build: open a Command Prompt in the folder and run
+      start-local.bat --rebuild
+
+
+-----------------------------------------------------------------
+5. OPEN IT FROM YOUR PHONE (same Wi-Fi)
+-----------------------------------------------------------------
+
+  The black window prints a "Network:" address such as
+  http://192.168.1.20:3000 . Open that on your phone while on the same
+  Wi-Fi. Windows may ask to allow Node.js through the firewall the first
+  time: choose "Private networks" and Allow.
+  Browsers only allow desktop notifications on http://localhost, so the
+  pop-up notifications work on the PC itself, not on the phone address.
+  Telegram alerts work everywhere.
+
+
+-----------------------------------------------------------------
+6. IF SOMETHING GOES WRONG
+-----------------------------------------------------------------
+
+"DATABASE_URL is missing from .env.local"
+    Open .env.local in the main folder with Notepad and paste the value
+    (Step 3). Note the file name starts with a dot.
+
+"Node.js is not installed"
+    Install it from https://nodejs.org and start again.
+
+"Price check FAILED"
+    Read the message after it. A database error means DATABASE_URL is
+    wrong; "fetch failed" now and then is the internet or Bitget, and the
+    next run 15 minutes later tries again.
+
+The capture log says "could not reach the site at http://localhost:3000"
+    start-local.bat is not running. Start it.
+
+Port 3000 is already in use ("EADDRINUSE")
+    Another copy is already running (check the taskbar), or another
+    program uses the port. Add  PORT=3001  to .env.local and use
+    http://localhost:3001 (and the same in capture\config.json).
+
+Neon free plan
+    The database pauses itself when idle and wakes on the next request,
+    so the first page load after a quiet spell can take a few seconds.

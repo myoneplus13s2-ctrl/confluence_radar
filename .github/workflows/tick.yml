@@ -5,8 +5,10 @@ name: Price check and alerts
 # Set the RADAR_URL repository variable if the site moves. Use the project's own domain: Vercel Authentication
 # protects the generated *-<team>.vercel.app addresses, and a protected address answers 401 to this job.
 on:
-  schedule:
-    - cron: "*/15 * * * *"
+  # Schedule turned off: the site now runs on the PC (start-local.bat), which GitHub cannot reach.
+  # To go back to Vercel, put back:
+  # schedule:
+  #   - cron: "*/15 * * * *"
   workflow_dispatch: {}
 
 concurrency:

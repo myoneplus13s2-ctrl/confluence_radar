@@ -48,7 +48,7 @@ type MediaType = "image/png" | "image/jpeg" | "image/webp" | "image/gif";
 export async function extractScreenshot(imageBase64: string, mediaType: MediaType): Promise<ScreenshotData> {
   if (process.env.GEMINI_API_KEY) return extractWithGemini(imageBase64, mediaType);
   if (process.env.ANTHROPIC_API_KEY) return extractWithClaude(imageBase64, mediaType);
-  throw new Error("No vision API key is set. Add GEMINI_API_KEY (free at aistudio.google.com) in Vercel's environment variables.");
+  throw new Error("No vision API key is set. Add GEMINI_API_KEY (free at aistudio.google.com) to .env.local (or Vercel's environment variables).");
 }
 
 // ── Gemini ──
@@ -105,7 +105,7 @@ async function extractWithGemini(imageBase64: string, mediaType: MediaType): Pro
 
 function friendly(msg: string): Error {
   if (/429|RESOURCE_EXHAUSTED|quota/i.test(msg)) return new Error("Gemini's free-tier limit was hit. Wait a minute and upload again.");
-  if (/API key not valid|API_KEY_INVALID|PERMISSION_DENIED/i.test(msg)) return new Error("Gemini rejected the API key. Check GEMINI_API_KEY in Vercel.");
+  if (/API key not valid|API_KEY_INVALID|PERMISSION_DENIED/i.test(msg)) return new Error("Gemini rejected the API key. Check GEMINI_API_KEY in .env.local (or Vercel).");
   if (/503|UNAVAILABLE|high demand/i.test(msg)) return new Error("Google's Gemini servers are busy right now. Try the upload again in a few minutes.");
   return new Error(`Gemini could not read the screenshot: ${msg.slice(0, 300)}`);
 }
