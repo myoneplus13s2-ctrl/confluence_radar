@@ -30,7 +30,8 @@ const isPlaceholder = (url) => /@host\//.test(url);
 
 function readEnv() {
   if (!existsSync(envFile)) return "";
-  return readFileSync(envFile, "utf8").replace(/^\uFEFF/, "");
+  // Any line ending (Notepad can save CR-only files) becomes \n, so the line-based matching below works.
+  return readFileSync(envFile, "utf8").replace(/^\uFEFF/, "").replace(/\r\n|\r/g, "\n");
 }
 
 function envValue(text, key) {
@@ -133,12 +134,12 @@ async function main() {
 
   const localUrl = `postgres://postgres:${encodeURIComponent(password)}@localhost:${port}/${dbName}`;
   if (existsSync(envFile)) copyFileSync(envFile, envFile + ".before-move");
-  let text = readEnv() || readFileSync(join(root, ".env.example"), "utf8");
+  let text = readEnv() || readFileSync(join(root, ".env.example"), "utf8").replace(/\r\n|\r/g, "\n");
   const line = `DATABASE_URL=${localUrl}`;
   const keepNeon = isLocal(envValue(text, "DATABASE_URL")) ? "" : `# Neon, kept in case you want to go back:\nNEON_DATABASE_URL=${neon}\n`;
   text = /^\s*DATABASE_URL\s*=.*$/m.test(text) ? text.replace(/^\s*DATABASE_URL\s*=.*$/m, line) : `${line}\n${text}`;
   if (keepNeon && !/^\s*NEON_DATABASE_URL\s*=/m.test(text)) text += (text.endsWith("\n") ? "" : "\n") + keepNeon;
-  writeFileSync(envFile, text.replace(/\r?\n/g, isWin ? "\r\n" : "\n"));
+  writeFileSync(envFile, text.replace(/\r\n|\r|\n/g, isWin ? "\r\n" : "\n"));
 
   console.log(`\nDone. .env.local now uses the database on this PC (${dbName}).`);
   console.log("A copy of the old .env.local is in .env.local.before-move, and the Neon backup in logs\\neon-backup.dump.");

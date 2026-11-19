@@ -31,7 +31,7 @@ function loadEnv() {
   for (const name of [".env.local", ".env"]) {
     const file = join(root, name);
     if (!existsSync(file)) continue;
-    for (const raw of readFileSync(file, "utf8").replace(/^\uFEFF/, "").split(/\r?\n/)) {
+    for (const raw of readFileSync(file, "utf8").replace(/^\uFEFF/, "").split(/\r\n|\r|\n/)) {
       const m = raw.match(/^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/);
       if (!m) continue;
       let v = m[2];
