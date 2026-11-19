@@ -423,7 +423,7 @@ export function Alerts({ fmt }: { fmt: Fmt }) {
         {!s.configured ? (
           <ol className="small">
             <li>In Telegram, open <b>@BotFather</b>, send <code>/newbot</code> and follow the steps. It gives you a bot token.</li>
-            <li>In Vercel, open the confluence-radar project → Settings → Environment Variables, add <code>TELEGRAM_BOT_TOKEN</code> with that token, then redeploy.</li>
+            <li>Add <code>TELEGRAM_BOT_TOKEN=</code> with that token to <code>.env.local</code> and restart <code>start-local.bat</code> (on Vercel: Settings → Environment Variables, then redeploy).</li>
             <li>Open your new bot in Telegram and press <b>Start</b>. Then come back here and press <b>Find my chat</b>.</li>
           </ol>
         ) : (

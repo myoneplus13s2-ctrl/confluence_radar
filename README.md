@@ -21,7 +21,7 @@ Upload hourly screenshots of two TradingView screeners and get a searchable hist
 
 ## Trends, fibs and Telegram alerts
 
-A check runs every 15 minutes (GitHub Actions, `.github/workflows/tick.yml`) and after every upload. It needs no TradingView access: prices come from Bitget's public market data (the screeners run on `BITGET:…USDT.P`).
+A check runs every 15 minutes (`start-local.bat` on your PC; on Vercel it was GitHub Actions, `.github/workflows/tick.yml`) and after every upload. It needs no TradingView access: prices come from Bitget's public market data (the screeners run on `BITGET:…USDT.P`).
 
 - **Trend** per timeframe from confirmed swing highs and lows (5 bars either side): higher high + higher low is an uptrend, lower high + lower low a downtrend. Once a trend is set, a higher high in a downtrend (or a lower low in an uptrend), or price going past the last swing before it confirms, is a *potential change*. Symbols with a signal in the last 7 days, or an active fib, are tracked.
 - **Fibs** are entered on the My fibs tab: symbol, 1H or 4H, green (bullish retest) or red (bearish retest), and the swing high and low. Levels are 0.5, 0.618 and 0.786. TradingView has no way to export drawings, so they are copied by hand.
@@ -37,6 +37,10 @@ The cell times have no year or timezone, so the upload box asks which offset eac
 ### Limits
 
 The BOS/CHoCH screener only shows the latest event per cell, so if two structure breaks print between screenshots, only the second is seen. Hourly uploads keep that gap small.
+
+## Run on your own PC (Windows)
+
+See [LOCAL-SETUP.txt](LOCAL-SETUP.txt). In short: double-click `start-local.bat`, fill in `.env.local` the first time, and open http://localhost:3000. `scripts/local.mjs` installs and builds when needed, runs `next start`, POSTs `/api/tick` every 15 minutes (replacing the GitHub Actions schedule, which is now off), and restarts the server if it stops. `autostart-on.bat` starts it at Windows sign-in. Point the capture script at it with `"site": "http://localhost:3000"` in `capture/config.json` (or the `RADAR_URL` environment variable).
 
 ## Deploy on Vercel
 

@@ -59,7 +59,7 @@ const token = () => process.env.TELEGRAM_BOT_TOKEN?.trim();
 
 async function api<T>(method: string, body?: unknown): Promise<T> {
   const t = token();
-  if (!t) throw new Error("TELEGRAM_BOT_TOKEN is not set in Vercel.");
+  if (!t) throw new Error("TELEGRAM_BOT_TOKEN is not set (.env.local on your PC, or Vercel's environment variables).");
   const res = await fetch(`https://api.telegram.org/bot${t}/${method}`, {
     method: "POST",
     headers: { "content-type": "application/json" },

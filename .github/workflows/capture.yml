@@ -1,8 +1,10 @@
 name: Hourly TradingView capture
 
 on:
-  schedule:
-    - cron: "5 * * * *" # every hour at :05 UTC (GitHub may start it a few minutes late)
+  # Schedule turned off: the site now runs on the PC (start-local.bat), which GitHub cannot reach.
+  # To go back to Vercel, put back:
+  # schedule:
+  #   - cron: "5 * * * *"
   workflow_dispatch: {}
 
 concurrency:
