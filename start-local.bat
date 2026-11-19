@@ -11,11 +11,12 @@ if errorlevel 1 (
   exit /b 1
 )
 
-if not exist ".env.local" (
-  copy ".env.example" ".env.local" >nul
+if not exist ".env.local" copy ".env.example" ".env.local" >nul
+findstr /r /c:"^GEMINI_API_KEY=[A-Za-z0-9]" /c:"^ANTHROPIC_API_KEY=[A-Za-z0-9]" ".env.local" >nul
+if errorlevel 1 (
   echo.
   echo First run: fill in your settings in the Notepad window that opens
-  echo ^(DATABASE_URL, GEMINI_API_KEY, TELEGRAM_BOT_TOKEN, CRON_SECRET^), save it, close Notepad.
+  echo ^(GEMINI_API_KEY, TELEGRAM_BOT_TOKEN, and DATABASE_URL if it is still empty^), save it, close Notepad.
   echo See LOCAL-SETUP.txt for where to find each value.
   echo.
   notepad ".env.local"
