@@ -12,6 +12,7 @@ import { spawn } from "node:child_process";
 import { existsSync, readFileSync, statSync, readdirSync, mkdirSync, appendFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { backup, lastBackupTime } from "./backup-db.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const isWin = process.platform === "win32";
@@ -133,13 +134,28 @@ async function tick() {
   }
 }
 
+/** A database backup once a day (checked with every price check), see scripts/backup-db.mjs. */
+let backingUp = false;
+async function dailyBackup() {
+  if (backingUp || Date.now() - lastBackupTime() < 23.5 * 3600_000) return;
+  backingUp = true;
+  try {
+    const { file } = await backup();
+    log(`Daily backup saved: ${file}`);
+  } catch (e) {
+    log(`Daily backup FAILED: ${e.message}`);
+  } finally {
+    backingUp = false;
+  }
+}
+
 /** Every 15 minutes on the quarter hour (:00, :15, :30, :45), like the GitHub Actions schedule. */
 function scheduleTicks() {
   const every = 15 * 60_000;
   const wait = every - (Date.now() % every) + 5_000;
   setTimeout(() => {
-    tick();
-    setInterval(tick, every);
+    tick().then(dailyBackup);
+    setInterval(() => tick().then(dailyBackup), every);
   }, wait);
 }
 
@@ -154,6 +170,7 @@ async function main() {
   await waitForSite();
   log(`Site is up: open http://localhost:${port()} in your browser. Keep this window open (minimise it).`);
   await tick(); // one check right away, then every 15 minutes
+  await dailyBackup();
   scheduleTicks();
 }
 
