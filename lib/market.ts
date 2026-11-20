@@ -45,14 +45,56 @@ async function call(path: string, params: Record<string, string | number>): Prom
 const toCandles = (rows: string[][]): Candle[] =>
   rows.map((r) => ({ t: +r[0], o: +r[1], h: +r[2], l: +r[3], c: +r[4], v: +r[5] || 0 })).filter((c) => Number.isFinite(c.c));
 
-/** The latest `limit` candles (max 1000), oldest first. The last one is still forming. */
-export async function recentCandles(symbol: string, tf: string, limit = 300): Promise<Candle[]> {
+// One check (tick) asks for the same symbol and timeframe several times: trends, fibs, the oscillator and fib
+// hits. While a check runs, each is fetched once, at the most candles any step planned to use, and shared.
+interface Memo { limit: number; candles: Promise<Candle[]> }
+let memo: Map<string, Memo> | null = null;
+let planned: Map<string, number> | null = null;
+
+/** Starts sharing candles between the steps of one check. Returns the function that stops it. */
+export function shareCandles(): () => void {
+  const mine = new Map<string, Memo>();
+  memo = mine;
+  planned = new Map();
+  return () => {
+    if (memo === mine) { memo = null; planned = null; }
+  };
+}
+
+/** Tells the shared fetch that a later step of this check wants `limit` candles of this symbol and timeframe. */
+export function planCandles(symbol: string, tf: string, limit: number) {
+  if (!planned) return;
+  const k = `${symbol}|${tf}`;
+  planned.set(k, Math.max(planned.get(k) ?? 0, Math.min(limit, 1000)));
+}
+
+/** The latest `limit` candles straight from Bitget, never shared: for the few newest ones, where the very latest price matters. */
+export async function fetchRecent(symbol: string, tf: string, limit: number): Promise<Candle[]> {
   const g = GRANULARITY[tf];
   if (!g) throw new Error(`No candles for timeframe ${tf}.`);
   const rows = await call("/api/v2/mix/market/candles", {
     symbol: bitgetSymbol(symbol), productType: "USDT-FUTURES", granularity: g.g, limit: Math.min(limit, 1000),
   });
   return toCandles(rows).sort((a, b) => a.t - b.t);
+}
+
+/** The latest `limit` candles (max 1000), oldest first. The last one is still forming. */
+export async function recentCandles(symbol: string, tf: string, limit = 300): Promise<Candle[]> {
+  limit = Math.min(limit, 1000);
+  if (!memo) return fetchRecent(symbol, tf, limit);
+  const k = `${symbol}|${tf}`;
+  const shared = memo;
+  let m = shared.get(k);
+  if (!m || m.limit < limit) {
+    const want = Math.max(limit, planned?.get(k) ?? 0);
+    const fresh: Memo = { limit: want, candles: fetchRecent(symbol, tf, want) };
+    shared.set(k, fresh);
+    fresh.candles.catch(() => { if (shared.get(k) === fresh) shared.delete(k); }); // a failed fetch is tried again by the next step
+    m = fresh;
+  }
+  const all = await m.candles;
+  // Bitget returns fewer when the symbol is younger than that; a shorter request then gets the same newest ones
+  return all.slice(-limit);
 }
 
 /** Up to 200 closed candles before `before`, oldest first (Bitget gives at most about 90 days per call). */

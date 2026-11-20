@@ -27,14 +27,25 @@ async function oscCandles(symbol: string, tf: string): Promise<Candle[]> {
   return got;
 }
 
-/** Returns how many symbol and timeframe pairs were worked out. */
-export async function checkOscillator(sql: postgres.Sql, symbols: string[], level: number, errors: string[]): Promise<number> {
+export interface OscDue {
+  last: Map<string, number>; // open time of the last candle read, by "symbol|tf"
+  due: Array<readonly [string, string]>; // symbol and timeframe pairs with a new closed candle since
+}
+
+/** The symbol and timeframe pairs to work out on this run. */
+export async function oscDue(sql: postgres.Sql, symbols: string[]): Promise<OscDue> {
   const last = new Map<string, number>();
   for (const r of await sql`SELECT symbol, tf, candle_t FROM osc_readings`) last.set(`${r.symbol}|${r.tf}`, new Date(r.candle_t).getTime());
   const due = symbols.flatMap((s) => OSC_TFS.map((tf) => [s, tf] as const)).filter(([s, tf]) => {
     const t = last.get(`${s}|${tf}`);
     return t == null || Date.now() >= t + 2 * TF_MS[tf]; // the candle after the last one read has closed
   }).slice(0, MAX_PER_RUN);
+  return { last, due };
+}
+
+/** Returns how many symbol and timeframe pairs were worked out. */
+export async function checkOscillator(sql: postgres.Sql, symbols: string[], level: number, errors: string[], pre?: OscDue): Promise<number> {
+  const { last, due } = pre ?? await oscDue(sql, symbols);
   let done = 0;
   await pool(due, 4, async ([symbol, tf]) => {
     let candles: Candle[];

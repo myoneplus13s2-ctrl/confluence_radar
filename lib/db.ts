@@ -246,6 +246,17 @@ async function migrate(s: postgres.Sql) {
       symbol    TEXT PRIMARY KEY,
       added_at  TIMESTAMPTZ NOT NULL DEFAULT now()
     );
+    -- How far each Gold signal and fib pair has been checked for a touch, so each check only reads the candles
+    -- since then. Read again from the Gold signal when the fib's ends or the tolerance changed.
+    CREATE TABLE IF NOT EXISTS fib_touch_checks (
+      gold_id     INTEGER NOT NULL,
+      fib_id      INTEGER NOT NULL,
+      high        DOUBLE PRECISION NOT NULL,
+      low         DOUBLE PRECISION NOT NULL,
+      tolerance   DOUBLE PRECISION NOT NULL,
+      checked_to  BIGINT NOT NULL,
+      PRIMARY KEY (gold_id, fib_id)
+    );
     -- An early screenshot upload misread ONDOUSDT.P as ONDUSDT.P, which Bitget doesn't list: fold it into ONDOUSDT.P.
     UPDATE signals s SET symbol = 'ONDOUSDT.P' WHERE s.symbol = 'ONDUSDT.P' AND NOT EXISTS (
       SELECT 1 FROM signals o WHERE o.symbol = 'ONDOUSDT.P' AND o.tf = s.tf AND o.code = s.code AND o.signal_time = s.signal_time);

@@ -1,0 +1,95 @@
+CONFLUENCE RADAR ON VERCEL + NEON (new accounts)
+================================================
+
+What you need: your new Vercel account, a Neon account (free), the GitHub account that now owns the
+repo (myoneplus13s2-ctrl), and this folder on your PC with PostgreSQL still installed.
+It takes about 20 minutes. Do the steps in order.
+
+
+1. STOP THE COPY ON YOUR PC
+---------------------------
+So nothing new lands in the PC database while you copy it, and you don't get every Telegram alert twice
+later (both copies would send them):
+  - Close the "Confluence Radar" window (the one start-local.bat opened).
+  - Double-click autostart-off.bat so it doesn't start again at sign-in.
+Nothing is deleted. To use the PC copy again later, double-click start-local.bat (see section 8).
+
+
+2. MAKE THE NEON DATABASE
+-------------------------
+  a. Go to https://console.neon.tech and sign up or sign in.
+  b. Create a project:
+       Name:      confluence-radar
+       Postgres:  17 (the default)
+       Region:    AWS Asia Pacific (Singapore)   <- important: the site runs in Singapore too
+  c. On the project page click "Connect". You will copy two strings from this box:
+       - With "Connection pooling" OFF: used once, in step 3.
+       - With "Connection pooling" ON (the address has "-pooler" in it): used by Vercel, in step 4.
+     Both start with postgresql://
+
+
+3. COPY YOUR DATA FROM THE PC TO NEON
+-------------------------------------
+  a. Double-click copy-db-to-neon.bat in this folder.
+  b. Paste the connection string with pooling OFF and press Enter.
+  c. Wait for "Done. Neon now has all your data." It also shows the signal count on both sides.
+Your PC database and .env.local are not changed.
+
+
+4. MAKE THE VERCEL PROJECT
+--------------------------
+  a. Sign in to your new Vercel account: https://vercel.com
+  b. Add New... > Project > Continue with GitHub, and allow access to myoneplus13s2-ctrl/confluence_radar.
+  c. Import confluence_radar. Leave the build settings as they are.
+  d. Open "Environment Variables" on the same page and add these (Name = Value):
+       DATABASE_URL         the Neon string with pooling ON (step 2c)
+       GEMINI_API_KEY       your key from https://aistudio.google.com/apikey
+       TELEGRAM_BOT_TOKEN   your bot token from @BotFather
+     Optional, only if you used them before:
+       TELEGRAM_CHAT_ID, APP_PASSWORD, CRON_SECRET, ALERT_TZ
+     (Your .env.local on this PC has the same values: open it with Notepad and copy them from there.
+      Leave out DATABASE_URL, NEON_DATABASE_URL and PORT from that file.)
+  e. Click Deploy and wait for it to finish.
+  f. Your site address is shown on the project page, like https://confluence-radar-xxxx.vercel.app
+     Use that one (the "Domains" address). Not an address with your team name in it: those are behind a
+     Vercel login, and the capture and the 15-minute check would get "401".
+  g. Open the site. All your signals, fibs, alerts and watchlist should be there.
+  h. Telegram tab: press "Send a test message" to check Telegram works.
+
+
+5. TURN ON THE 15-MINUTE CHECK (GitHub)
+---------------------------------------
+Vercel's free plan can only run a job once a day, so GitHub runs the check every 15 minutes for free
+(the repo must stay public for that to be free).
+  a. Open https://github.com/myoneplus13s2-ctrl/confluence_radar/settings/variables/actions
+  b. "New repository variable":  Name RADAR_URL,  Value your site address from 4f (no / at the end).
+  c. Only if you set APP_PASSWORD in Vercel: on the "Secrets" tab add a secret named CRON_SECRET with the
+     same value as CRON_SECRET in Vercel.
+  d. Open the "Actions" tab. If GitHub asks, click "I understand my workflows, go ahead and enable them".
+  e. Click "Price check and alerts" > "Run workflow" > "Run workflow". After a minute it should be green.
+From then on it runs by itself every 15 minutes (GitHub sometimes starts it a few minutes late).
+
+
+6. POINT THE HOURLY CAPTURE AT THE NEW SITE
+-------------------------------------------
+The capture still runs on this PC. Open capture\config.json with Notepad and change the "site" line to
+your new address, for example:
+    "site": "https://confluence-radar-xxxx.vercel.app",
+Save. The next hourly capture uploads to Vercel.
+
+
+7. CHECK IT
+-----------
+After the next full hour:
+  - Uploads tab: a new upload from the capture.
+  - The "Price check and alerts" runs in GitHub's Actions tab are green.
+  - Telegram messages arrive as before (once each, not twice).
+
+
+8. THE COPY ON YOUR PC (fallback)
+---------------------------------
+It stays installed but switched off. If Vercel or Neon ever stops working:
+  - Double-click start-local.bat (and autostart-on.bat to start it at sign-in again).
+  - Change "site" in capture\config.json back to http://localhost:3000
+  - In GitHub, delete the RADAR_URL variable (step 5b) so two copies don't both send alerts.
+Note that it has the data up to the day you copied it in step 3, not what Vercel saved since.

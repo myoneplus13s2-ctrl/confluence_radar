@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { dataChanged } from "@/lib/cache";
 import { db } from "@/lib/db";
 import { FibInput } from "@/lib/fibs";
 import { normalizeSymbol } from "@/lib/signals";
@@ -13,6 +14,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const sql = await db();
     if (Object.keys(body).length === 1 && typeof body.active === "boolean") {
       const [row] = await sql`UPDATE fibs SET active = ${body.active} WHERE id = ${id} RETURNING *`;
+      dataChanged();
       return row ? NextResponse.json(row) : fail("That fib no longer exists.", 404);
     }
     const parsed = FibInput.safeParse(body);
@@ -26,6 +28,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
           high = ${f.high}, low = ${f.low}, note = ${f.note || null}, created_at = now()
         WHERE id = ${id} RETURNING *`;
     });
+    dataChanged();
     return row ? NextResponse.json(row) : fail("That fib no longer exists.", 404);
   } catch (e) {
     return fail(e, 400);
@@ -38,6 +41,7 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
     if (!Number.isInteger(id)) return fail("Bad fib id.", 400);
     const sql = await db();
     await sql`DELETE FROM fibs WHERE id = ${id}`;
+    dataChanged();
     return NextResponse.json({ ok: true });
   } catch (e) {
     return fail(e);

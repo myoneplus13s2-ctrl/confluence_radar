@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { cached, dataChanged } from "@/lib/cache";
 import { db } from "@/lib/db";
 import { bitgetSymbol, lastPrices } from "@/lib/market";
 import { PriceAlertInput, resolveAlert } from "@/lib/price-alerts";
@@ -24,15 +25,19 @@ async function prices(): Promise<Map<string, number> | null> {
 export async function GET(req: Request) {
   try {
     const after = new URL(req.url).searchParams.get("after");
-    const sql = await db();
     if (after != null) {
       const since = new Date(after);
       if (Number.isNaN(since.getTime())) return fail("Bad time.", 400);
-      return NextResponse.json(await sql`
-        SELECT * FROM price_alerts WHERE detected_at > ${since} ORDER BY detected_at DESC LIMIT 50`);
+      return NextResponse.json(await cached(["price-alerts-after", since.toISOString()], async () => {
+        const sql = await db();
+        return [...await sql`SELECT * FROM price_alerts WHERE detected_at > ${since} ORDER BY detected_at DESC LIMIT 50`];
+      }));
     }
-    const [alerts, symbols, live] = await Promise.all([
-      sql`
+    // The alerts from the cache, the live prices fresh from Bitget
+    const [[alerts, symbols], live] = await Promise.all([
+      cached(["price-alerts"], async () => {
+        const sql = await db();
+        return Promise.all([sql`
         SELECT a.*, t.price AS last_price FROM price_alerts a
         LEFT JOIN trends t ON t.symbol = a.symbol AND t.tf = '15m'
         WHERE a.triggered_at IS NULL OR a.triggered_at > now() - interval '30 days'
@@ -41,6 +46,8 @@ export async function GET(req: Request) {
         SELECT symbol FROM signals WHERE signal_time > now() - interval '30 days'
         UNION SELECT symbol FROM fibs WHERE active
         UNION SELECT symbol FROM price_alerts ORDER BY symbol`,
+        ]).then(([a, s]) => [[...a], [...s]] as const);
+      }),
       prices(),
     ]);
     return NextResponse.json({
@@ -63,6 +70,7 @@ export async function POST(req: Request) {
       INSERT INTO price_alerts (symbol, level, direction, fib_id, fib_label, note)
       VALUES (${a.symbol}, ${a.level}, ${a.direction}, ${a.fibId}, ${a.label}, ${a.note})
       RETURNING *`;
+    dataChanged();
     return NextResponse.json({ ...row, price: a.price });
   } catch (e) {
     return fail(e, 400);

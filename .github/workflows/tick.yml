@@ -4,11 +4,11 @@ name: Price check and alerts
 # Needs the CRON_SECRET repository secret (the same value as CRON_SECRET in Vercel) when the site has APP_PASSWORD set.
 # Set the RADAR_URL repository variable if the site moves. Use the project's own domain: Vercel Authentication
 # protects the generated *-<team>.vercel.app addresses, and a protected address answers 401 to this job.
+# Runs only when the RADAR_URL repository variable is set (Settings > Secrets and variables > Actions > Variables),
+# so a copy of the repo without a site of its own does nothing.
 on:
-  # Schedule turned off: the site now runs on the PC (start-local.bat), which GitHub cannot reach.
-  # To go back to Vercel, put back:
-  # schedule:
-  #   - cron: "*/15 * * * *"
+  schedule:
+    - cron: "*/15 * * * *"
   workflow_dispatch: {}
 
 concurrency:
@@ -17,12 +17,13 @@ concurrency:
 
 jobs:
   tick:
+    if: ${{ vars.RADAR_URL != '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - name: Run the check
         env:
-          RADAR_URL: ${{ vars.RADAR_URL || 'https://confluence-radar.vercel.app' }}
+          RADAR_URL: ${{ vars.RADAR_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
           auth=()

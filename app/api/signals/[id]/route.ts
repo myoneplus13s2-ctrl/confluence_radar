@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { dataChanged } from "@/lib/cache";
 import { db } from "@/lib/db";
 import { correctSignal } from "@/lib/ingest";
 import { fail } from "@/lib/http";
@@ -10,7 +11,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     if (!Number.isInteger(id)) return fail("Bad signal id.", 400);
     const { code } = (await req.json()) as { code?: string | null };
     if (code === undefined) return fail("Send the corrected code, or null to remove the signal.", 400);
-    return NextResponse.json(await correctSignal(await db(), id, code));
+    const res = await correctSignal(await db(), id, code);
+    dataChanged();
+    return NextResponse.json(res);
   } catch (e) {
     return fail(e, 400);
   }

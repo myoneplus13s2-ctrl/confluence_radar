@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { dataChanged } from "@/lib/cache";
 import { db } from "@/lib/db";
 import { extractScreenshot } from "@/lib/extract";
 import { flatten, store } from "@/lib/ingest";
@@ -30,6 +31,7 @@ export async function POST(req: Request) {
     const flat = Number.isFinite(sentTime) ? flatten(data, offsets, new Date(sentTime), true) : flatten(data, offsets, new Date());
     const sql = await db();
     const res = await store(sql, flat, data, file.name || null, offsets[flat.source]);
+    dataChanged();
     tickAfterUpload(req);
     return NextResponse.json({
       uploadId: res.uploadId,

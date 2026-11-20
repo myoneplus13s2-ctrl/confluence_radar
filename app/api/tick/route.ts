@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { cached, dataChanged } from "@/lib/cache";
 import { db } from "@/lib/db";
 import { tick } from "@/lib/radar";
 import { fail } from "@/lib/http";
@@ -9,9 +10,12 @@ export const maxDuration = 120;
 export const preferredRegion = "sin1";
 
 /** Runs the check: trends, fib touches, BOS/CHoCH after them, Telegram alerts. Called every 15 minutes and after uploads. */
-export async function POST() {
+export async function POST(req: Request) {
   try {
-    return NextResponse.json(await tick(await db()));
+    const light = new URL(req.url).searchParams.get("light") === "1";
+    const summary = await tick(await db(), { light });
+    dataChanged();
+    return NextResponse.json(summary);
   } catch (e) {
     return fail(e);
   }
@@ -20,8 +24,10 @@ export async function POST() {
 /** The last few runs. */
 export async function GET() {
   try {
-    const sql = await db();
-    return NextResponse.json(await sql`SELECT started_at, summary FROM ticks ORDER BY id DESC LIMIT 10`);
+    return NextResponse.json(await cached(["ticks"], async () => {
+      const sql = await db();
+      return [...await sql`SELECT started_at, summary FROM ticks ORDER BY id DESC LIMIT 10`];
+    }));
   } catch (e) {
     return fail(e);
   }

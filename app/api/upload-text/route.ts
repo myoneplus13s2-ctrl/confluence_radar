@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { dataChanged } from "@/lib/cache";
 import { db } from "@/lib/db";
 import { store } from "@/lib/ingest";
 import { parseOffset, type Source } from "@/lib/signals";
@@ -39,6 +40,7 @@ export async function POST(req: Request) {
         warnings: flat.warnings,
       });
     }
+    dataChanged();
     tickAfterUpload(req);
     return NextResponse.json(results);
   } catch (e) {

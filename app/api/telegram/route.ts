@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { dataChanged } from "@/lib/cache";
 import { db } from "@/lib/db";
 import { alertSettings, DEFAULT_SETTINGS, discoverChat, sendTelegram, setSetting, telegramStatus, type AlertSettings } from "@/lib/telegram";
 import { fail } from "@/lib/http";
@@ -43,6 +44,7 @@ export async function POST(req: Request) {
       s.fibTolerancePct = Math.min(Math.max(s.fibTolerancePct, 0), 5);
       s.oscLevel = Math.min(Math.max(s.oscLevel, 1), 104);
       await setSetting(sql, "alerts", s);
+      dataChanged(); // the oscillator level is part of the Prime Osc data
       return NextResponse.json(s);
     }
     return fail("Unknown action.", 400);

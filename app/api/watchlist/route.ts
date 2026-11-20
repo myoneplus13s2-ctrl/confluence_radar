@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { cached, dataChanged } from "@/lib/cache";
 import { db } from "@/lib/db";
 import { tickAfterUpload } from "@/lib/after-upload";
 import { addToWatchlist, listWatchlist, removeFromWatchlist } from "@/lib/watchlist";
@@ -11,8 +12,7 @@ export const preferredRegion = "sin1";
 /** The watchlist, oldest first. */
 export async function GET() {
   try {
-    const sql = await db();
-    return NextResponse.json(await listWatchlist(sql));
+    return NextResponse.json(await cached(["watchlist"], async () => listWatchlist(await db())));
   } catch (e) {
     return fail(e);
   }
@@ -25,7 +25,8 @@ export async function POST(req: Request) {
     if (typeof body.symbol !== "string") return fail("Type a symbol, e.g. BTCUSDT.P.", 400);
     const sql = await db();
     const symbol = await addToWatchlist(sql, body.symbol);
-    tickAfterUpload(req);
+    dataChanged();
+    tickAfterUpload(req, { light: false });
     return NextResponse.json({ symbol, list: await listWatchlist(sql) });
   } catch (e) {
     return fail(e, 400);
@@ -39,6 +40,7 @@ export async function DELETE(req: Request) {
     if (!symbol) return fail("Which symbol?", 400);
     const sql = await db();
     await removeFromWatchlist(sql, symbol);
+    dataChanged();
     return NextResponse.json(await listWatchlist(sql));
   } catch (e) {
     return fail(e);
