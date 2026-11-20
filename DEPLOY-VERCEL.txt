@@ -67,7 +67,11 @@ Vercel's free plan can only run a job once a day, so GitHub runs the check every
      same value as CRON_SECRET in Vercel.
   d. Open the "Actions" tab. If GitHub asks, click "I understand my workflows, go ahead and enable them".
   e. Click "Price check and alerts" > "Run workflow" > "Run workflow". After a minute it should be green.
-From then on it runs by itself every 15 minutes (GitHub sometimes starts it a few minutes late).
+GitHub's own 15-minute schedule turned out to start late or not at all, so the timer is cron-job.org:
+  f. Sign up at https://cron-job.org (free) > Create cronjob.
+     URL: <your site address>/api/tick   Schedule: every 15 minutes
+     Advanced: Request method POST, Timeout as long as it allows.
+     (Only if you set APP_PASSWORD: add a header  Authorization: Bearer <your CRON_SECRET>)
 
 
 6. POINT THE HOURLY CAPTURE AT THE NEW SITE
