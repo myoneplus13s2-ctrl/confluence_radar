@@ -186,6 +186,32 @@ Neon free plan
   after DATABASE_URL= and start start-local.bat again.
 
   Backups: the data now lives only on this PC. logs\neon-backup.dump is
-  the copy taken from Neon. To make a fresh backup at any time, open a
-  Command Prompt and run (change 18 to your version):
-    "C:\Program Files\PostgreSQL\18\bin\pg_dump" -U postgres -Fc -f radar-backup.dump confluence_radar
+  the copy taken from Neon. For backups from now on, see section 8.
+
+
+
+-----------------------------------------------------------------
+8. BACKUPS TO GOOGLE DRIVE
+-----------------------------------------------------------------
+
+  Once, install Google Drive for desktop and sign in:
+      https://www.google.com/drive/download/
+  It adds a drive (usually G:) with a "My Drive" folder. Anything saved
+  there is uploaded to your Google Drive by itself.
+
+  Back up now:  double-click  backup-db.bat .
+  It saves a file like  confluence_radar-2026-11-20_0400.dump  in
+      My Drive\Confluence Radar backups
+  Without Google Drive for desktop it saves it in logs\backups instead;
+  then upload that file at https://drive.google.com yourself.
+
+  Automatic: while start-local.bat runs, it also makes one backup a day.
+  The newest 14 backups are kept and older ones are deleted.
+
+  Another folder: add  BACKUP_DIR=D:\some\folder  to .env.local.
+
+  To restore a backup (only if something went wrong): close the
+  Confluence Radar window, open a Command Prompt and run (change 18 to
+  your PostgreSQL version and the file name to your backup):
+    "C:\Program Files\PostgreSQL\18\bin\pg_restore" -U postgres --clean --if-exists --no-owner -d confluence_radar "G:\My Drive\Confluence Radar backups\confluence_radar-2026-11-20_0400.dump"
+  It asks for the postgres password. Then start start-local.bat again.
