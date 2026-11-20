@@ -5,7 +5,7 @@
 import type postgres from "postgres";
 import { QUIET_FIB_TFS } from "./autofib";
 import { fibLevels, type Fib } from "./fibs";
-import { recentCandles, TF_MS } from "./market";
+import { fetchRecent, TF_MS } from "./market";
 import { GOLD_WINDOW_DAYS, SIGNAL_BY_CODE, SIGNALS } from "./signals";
 import { esc, sendTelegram, telegramReady, type AlertSettings } from "./telegram";
 import { fmtPrice, type Candle } from "./trend";
@@ -52,12 +52,12 @@ export async function findLevelHits(sql: postgres.Sql, tolerancePct: number, err
   const gold = await liveGold(sql);
   const bySymbol = new Map<string, typeof fibs>();
   for (const f of fibs) bySymbol.set(f.symbol, [...(bySymbol.get(f.symbol) ?? []), f]);
-  let found = 0;
+  const rows: Array<Record<string, unknown>> = [];
 
   await pool([...bySymbol.entries()], 4, async ([symbol, list]) => {
     let candles: Candle[];
     try {
-      candles = (await recentCandles(symbol, "15m", 12)).filter((c) => c.t >= from); // includes the candle still forming
+      candles = (await fetchRecent(symbol, "15m", 12)).filter((c) => c.t >= from); // includes the candle still forming
     } catch (e) {
       errors.push(e instanceof Error ? e.message : String(e));
       return;
@@ -70,15 +70,20 @@ export async function findLevelHits(sql: postgres.Sql, tolerancePct: number, err
         const tol = (lv.price * tolerancePct) / 100;
         const c = candles.find((k) => k.t >= drawnAt && k.l <= lv.price + tol && k.h >= lv.price - tol);
         if (!c) continue;
-        const [row] = await sql`
-          INSERT INTO level_hits (fib_id, symbol, tf, direction, ratio, level, hit_at, confluence, sent)
-          VALUES (${f.id}, ${symbol}, ${f.tf}, ${f.direction}, ${lv.ratio}, ${Number(lv.price.toPrecision(10))},
-            ${new Date(c.t)}, ${gold.has(`${symbol}|${f.direction}`)}, ${last == null || QUIET_FIB_TFS.includes(f.tf)})
-          ON CONFLICT (fib_id, ratio, level) DO NOTHING RETURNING id`;
-        if (row) found++;
+        rows.push({
+          fib_id: f.id, symbol, tf: f.tf, direction: f.direction, ratio: lv.ratio, level: Number(lv.price.toPrecision(10)),
+          hit_at: new Date(c.t), confluence: gold.has(`${symbol}|${f.direction}`), sent: last == null || QUIET_FIB_TFS.includes(f.tf),
+        });
       }
     }
   });
+  // One statement for all of them; levels already recorded are left as they are
+  let found = 0;
+  for (let i = 0; i < rows.length; i += 1000) {
+    found += (await sql`
+      INSERT INTO level_hits ${sql(rows.slice(i, i + 1000) as never, "fib_id", "symbol", "tf", "direction", "ratio", "level", "hit_at", "confluence", "sent")}
+      ON CONFLICT (fib_id, ratio, level) DO NOTHING RETURNING id`).length;
+  }
   await sql`
     INSERT INTO settings (key, value) VALUES ('level_hits_checked', ${sql.json(started)})
     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`;

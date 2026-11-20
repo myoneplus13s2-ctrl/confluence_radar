@@ -15,8 +15,10 @@ export async function storedCandles(sql: postgres.Sql, symbol: string, tf: strin
   const recent = (await recentCandles(symbol, tf, 1000)).slice(0, -1); // the last one is still forming
   if (!recent.length) return { candles: [], complete: true };
   const [have] = await sql`
-    SELECT min(t)::float8 AS oldest, max(t)::float8 AS newest, count(*)::int AS n FROM candles WHERE symbol = ${symbol} AND tf = ${tf}`;
-  let done = !!(await sql`SELECT done FROM candle_sets WHERE symbol = ${symbol} AND tf = ${tf}`)[0]?.done;
+    SELECT min(t)::float8 AS oldest, max(t)::float8 AS newest, count(*)::int AS n,
+      (SELECT done FROM candle_sets WHERE symbol = ${symbol} AND tf = ${tf}) AS done
+    FROM candles WHERE symbol = ${symbol} AND tf = ${tf}`;
+  let done = !!have.done;
   const got: Candle[] = [...recent];
   let pages = 0;
 
@@ -56,7 +58,8 @@ export async function storedCandles(sql: postgres.Sql, symbol: string, tf: strin
   for (let i = 0; i < rows.length; i += 1000) {
     await sql`
       INSERT INTO candles ${sql(rows.slice(i, i + 1000), "symbol", "tf", "t", "o", "h", "l", "c")}
-      ON CONFLICT (symbol, tf, t) DO UPDATE SET o = EXCLUDED.o, h = EXCLUDED.h, l = EXCLUDED.l, c = EXCLUDED.c`;
+      ON CONFLICT (symbol, tf, t) DO UPDATE SET o = EXCLUDED.o, h = EXCLUDED.h, l = EXCLUDED.l, c = EXCLUDED.c
+      WHERE (candles.o, candles.h, candles.l, candles.c) IS DISTINCT FROM (EXCLUDED.o, EXCLUDED.h, EXCLUDED.l, EXCLUDED.c)`; // unchanged rows aren't rewritten
   }
   await sql`
     INSERT INTO candle_sets (symbol, tf, done) VALUES (${symbol}, ${tf}, ${done})

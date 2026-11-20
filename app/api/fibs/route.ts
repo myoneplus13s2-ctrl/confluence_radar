@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { cached, dataChanged } from "@/lib/cache";
 import { db } from "@/lib/db";
 import { FibInput } from "@/lib/fibs";
 import { listFibs } from "@/lib/queries";
@@ -9,7 +10,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    return NextResponse.json(await listFibs(await db()));
+    return NextResponse.json(await cached(["fibs"], async () => listFibs(await db())));
   } catch (e) {
     return fail(e);
   }
@@ -25,6 +26,7 @@ export async function POST(req: Request) {
       INSERT INTO fibs (symbol, tf, direction, high, low, note)
       VALUES (${normalizeSymbol(f.symbol)}, ${f.tf}, ${f.direction}, ${f.high}, ${f.low}, ${f.note || null})
       RETURNING *`;
+    dataChanged();
     return NextResponse.json(row);
   } catch (e) {
     return fail(e);

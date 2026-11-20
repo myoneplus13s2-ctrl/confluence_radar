@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { dataChanged } from "@/lib/cache";
 import { db } from "@/lib/db";
 import { bitgetSymbol, lastPrices } from "@/lib/market";
 import { directionTo, PriceAlertInput, resolveAlert, type PriceAlert } from "@/lib/price-alerts";
@@ -45,6 +46,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         WHERE id = ${id}`;
     }
     const [row] = await sql`SELECT * FROM price_alerts WHERE id = ${id}`;
+    dataChanged();
     return NextResponse.json(row);
   } catch (e) {
     return fail(e, 400);
@@ -58,6 +60,7 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
     // Keep the client in a variable: the bundler compiled `(await db())`...`` into db()`...` and broke delete.
     const sql = await db();
     await sql`DELETE FROM price_alerts WHERE id = ${id}`;
+    dataChanged();
     return NextResponse.json({ ok: true });
   } catch (e) {
     return fail(e);

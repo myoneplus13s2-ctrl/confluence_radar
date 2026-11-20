@@ -21,7 +21,7 @@ Upload hourly screenshots of two TradingView screeners and get a searchable hist
 
 ## Trends, fibs and Telegram alerts
 
-A check runs every 15 minutes (`start-local.bat` on your PC; on Vercel it was GitHub Actions, `.github/workflows/tick.yml`) and after every upload. It needs no TradingView access: prices come from Bitget's public market data (the screeners run on `BITGET:…USDT.P`).
+A check runs every 15 minutes (on Vercel: GitHub Actions, `.github/workflows/tick.yml`, once the `RADAR_URL` repository variable is set; on your PC: `start-local.bat`) and after every upload. It needs no TradingView access: prices come from Bitget's public market data (the screeners run on `BITGET:…USDT.P`).
 
 - **Trend** per timeframe from confirmed swing highs and lows (5 bars either side): higher high + higher low is an uptrend, lower high + lower low a downtrend. Once a trend is set, a higher high in a downtrend (or a lower low in an uptrend), or price going past the last swing before it confirms, is a *potential change*. Symbols with a signal in the last 7 days, or an active fib, are tracked.
 - **Fibs** are entered on the My fibs tab: symbol, 1H or 4H, green (bullish retest) or red (bearish retest), and the swing high and low. Levels are 0.5, 0.618 and 0.786. TradingView has no way to export drawings, so they are copied by hand.
@@ -44,8 +44,10 @@ See [LOCAL-SETUP.txt](LOCAL-SETUP.txt). In short: double-click `start-local.bat`
 
 ## Deploy on Vercel
 
-1. Import this repository in Vercel.
-2. Storage → add **Neon** (Postgres) from the Marketplace and connect it to the project. This sets `DATABASE_URL`. Tables are created on first use.
+Step by step, including copying the data from the PC copy to a new Neon database: [DEPLOY-VERCEL.txt](DEPLOY-VERCEL.txt) (`copy-db-to-neon.bat` runs `scripts/copy-db-to-neon.mjs`, `pg_dump` from the local database and `pg_restore` into Neon). In short:
+
+1. Import this repository in Vercel. `vercel.json` runs all functions in Singapore (`sin1`): Bitget refuses some US addresses, and the database should be in the same region (Neon: AWS Asia Pacific, Singapore).
+2. Create a **Neon** database (Singapore) and set `DATABASE_URL` to its pooled connection string. Tables are created on first use.
 3. Settings → Environment Variables:
    - `GEMINI_API_KEY`: free key from https://aistudio.google.com/apikey (no card needed). Free-tier limits are far above 2 screenshots an hour. Google may use free-tier inputs to improve its products.
    - `APP_PASSWORD` (recommended): the site then asks for a password (any username). Without it anyone with the URL can use up your Gemini quota.
@@ -53,6 +55,19 @@ See [LOCAL-SETUP.txt](LOCAL-SETUP.txt). In short: double-click `start-local.bat`
    - For alerts: `TELEGRAM_BOT_TOKEN`, and `CRON_SECRET` when `APP_PASSWORD` is set (see below). Optional: `TELEGRAM_CHAT_ID`, `ALERT_TZ` (default `Asia/Kolkata`).
    - Optional, paid instead of Gemini: `ANTHROPIC_API_KEY` with `EXTRACTION_MODEL` (default `claude-opus-5-5`) and `EXTRACTION_EFFORT`. Used only when `GEMINI_API_KEY` is not set.
 4. Redeploy.
+5. GitHub → Settings → Secrets and variables → Actions → Variables: `RADAR_URL` = the site's address. This turns on the 15-minute check.
+
+### Keeping CPU and database use low
+
+Vercel's free plan limits function CPU time, and Neon's free plan limits how long the database is awake (it sleeps after 5 minutes without queries). So:
+
+- **Page data is cached** (`lib/cache.ts`, Next.js data cache). Reading a tab, or the alarm's once-a-minute check, doesn't touch the database until something changes; every write (the check, uploads, edits on the site) clears the cache. Between checks the database can sleep even with the site open.
+- **One fetch per symbol and timeframe per check** (`shareCandles`/`planCandles` in `lib/market.ts`): trends, fibs and the oscillator share the candles, fetched at the longest length any step needs.
+- **Batched writes**: trends, fibs, fib-level hits and fib runs are written with one statement each instead of one per row, the BOS/CHoCH-after-fib step reads its candidates in one query, and Telegram messages (with their trend line) are only built when they will be sent. A steady check makes about 30 queries instead of ~1,500 with 60 symbols.
+- **Gold → fib touches are read incrementally** (`fib_touch_checks`): each pair remembers how far it was checked, so a check reads the last few 15m candles instead of up to 21 days of them. A pair is read again from the Gold signal when the fib's ends or the tolerance change, so the result is the same.
+- **Light check after uploads**: trends refreshed by the scheduled check under 10 minutes ago are kept (new symbols still get theirs).
+
+`DATABASE_URL=postgres://... npx tsx scripts/bench-tick.ts 60` runs the check against a fake Bitget with 60 symbols and prints CPU time, queries and Bitget calls per run (it drops the tables in that database).
 
 ## Text uploads
 

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { cached } from "@/lib/cache";
 import { db } from "@/lib/db";
 import { listSignals } from "@/lib/queries";
 import { fail, list, num } from "@/lib/http";
@@ -8,7 +9,7 @@ export const dynamic = "force-dynamic";
 export async function GET(req: Request) {
   try {
     const q = new URL(req.url).searchParams;
-    const rows = await listSignals(await db(), {
+    const rows = await cached(["signals", q.toString()], async () => listSignals(await db(), {
       symbol: q.get("symbol") || undefined,
       codes: list(q.get("codes")),
       tfs: list(q.get("tfs")),
@@ -17,7 +18,7 @@ export async function GET(req: Request) {
       sinceHours: num(q.get("sinceHours")),
       latestOnly: q.get("latest") === "1",
       limit: num(q.get("limit")),
-    });
+    }));
     return NextResponse.json(rows);
   } catch (e) {
     return fail(e);
