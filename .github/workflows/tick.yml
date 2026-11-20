@@ -4,11 +4,12 @@ name: Price check and alerts
 # Needs the CRON_SECRET repository secret (the same value as CRON_SECRET in Vercel) when the site has APP_PASSWORD set.
 # Set the RADAR_URL repository variable if the site moves. Use the project's own domain: Vercel Authentication
 # protects the generated *-<team>.vercel.app addresses, and a protected address answers 401 to this job.
-# Runs only when the RADAR_URL repository variable is set (Settings > Secrets and variables > Actions > Variables),
-# so a copy of the repo without a site of its own does nothing.
+# The 15-minute schedule now comes from cron-job.org (POST <site>/api/tick every 15 minutes): GitHub started this
+# schedule late or not at all. This stays for running the check by hand (Actions > Run workflow), and only runs
+# when the RADAR_URL repository variable is set. To use GitHub's schedule again, add under "on:":
+#   schedule:
+#     - cron: "*/15 * * * *"
 on:
-  schedule:
-    - cron: "*/15 * * * *"
   workflow_dispatch: {}
 
 concurrency:
